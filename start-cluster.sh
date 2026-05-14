@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
+cd "$(dirname "$0")"
+source ./config.sh
+
 echo "======================================"
 echo "  Hadoop + Spark + Hive 集群启动脚本"
 echo "======================================"
-
-# 确保在脚本所在目录运行
-cd "$(dirname "$0")"
 
 # 检查代理（如果设置了环境变量则使用）
 if [ -n "$HTTP_PROXY" ] || [ -n "$http_proxy" ]; then
@@ -32,17 +32,17 @@ echo "  集群启动完成！"
 echo "======================================"
 echo ""
 echo "Web UI 访问地址："
-echo "  HDFS NameNode:     http://localhost:9870"
-echo "  YARN ResourceManager: http://localhost:8088"
-echo "  Spark Master:      http://localhost:8080"
-echo "  Spark Worker:      http://localhost:8081"
-echo "  MapReduce History: http://localhost:8188"
+echo "  HDFS NameNode:        http://localhost:${HOST_HDFS_NAMENODE_WEB_PORT}"
+echo "  YARN ResourceManager: http://localhost:${HOST_YARN_RM_PORT}"
+echo "  Spark Master:         http://localhost:${HOST_SPARK_MASTER_WEB_PORT}"
+echo "  Spark Worker:         http://localhost:${HOST_SPARK_WORKER_PORT}"
+echo "  MapReduce History:    http://localhost:${HOST_MR_HISTORY_PORT}"
 echo ""
 echo "服务端口："
-echo "  HiveServer2:       localhost:10000 (beeline/jdbc)"
-echo "  Hive Web UI:       localhost:10002"
-echo "  HDFS:              localhost:9000"
-echo "  Spark Master:      localhost:7077"
+echo "  HiveServer2:       localhost:${HOST_HIVE_SERVER_PORT} (beeline/jdbc)"
+echo "  Hive Web UI:       localhost:${HOST_HIVE_WEB_PORT}"
+echo "  HDFS:              localhost:${HOST_HDFS_RPC_PORT}"
+echo "  Spark Master:      localhost:${HOST_SPARK_MASTER_PORT}"
 echo ""
 echo "常用命令："
 echo "  ./hive-cli.sh       进入 Hive CLI"
