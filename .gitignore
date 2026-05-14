@@ -1,0 +1,33 @@
+# Runtime data
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.log
