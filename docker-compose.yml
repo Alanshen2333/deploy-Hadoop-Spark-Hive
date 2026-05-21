@@ -4,7 +4,7 @@ services:
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: namenode
-    restart: always
+
     ports:
       - 19870:9870
       - 19000:9000
@@ -20,7 +20,7 @@ services:
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
     container_name: datanode
-    restart: always
+
     volumes:
       - hadoop_datanode:/hadoop/dfs/data
     environment:
@@ -33,7 +33,7 @@ services:
   resourcemanager:
     image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
     container_name: resourcemanager
-    restart: always
+
     ports:
       - 18088:8088
     environment:
@@ -46,7 +46,7 @@ services:
   nodemanager:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
     container_name: nodemanager
-    restart: always
+
     ports:
       - 18042:8042
     environment:
@@ -59,7 +59,7 @@ services:
   historyserver:
     image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
     container_name: historyserver
-    restart: always
+
     ports:
       - 18188:8188
     volumes:
@@ -75,10 +75,14 @@ services:
     image: bde2020/spark-master:3.3.0-hadoop3.3
     container_name: spark-master
     hostname: spark-master
+
     ports:
       - "18080:8080"
       - "17077:7077"
       - "18888:8888"
+    volumes:
+      - ./spark-hive-site.xml:/spark/conf/hive-site.xml:ro
+      - ./jars/postgresql-42.7.4.jar:/spark/jars/postgresql-42.7.4.jar:ro
     environment:
       - INIT_DAEMON_STEP=setup_spark
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
@@ -98,10 +102,14 @@ services:
     image: bde2020/spark-worker:3.3.0-hadoop3.3
     container_name: spark-worker
     hostname: spark-worker
+
     depends_on:
       - spark-master
     ports:
       - "18081:8081"
+    volumes:
+      - ./spark-hive-site.xml:/spark/conf/hive-site.xml:ro
+      - ./jars/postgresql-42.7.4.jar:/spark/jars/postgresql-42.7.4.jar:ro
     environment:
       - SPARK_MASTER=spark://spark-master:7077
       - SPARK_WORKER_CORES=2
@@ -118,24 +126,49 @@ services:
     networks:
       - hadoop-spark-hive
 
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+
+    environment:
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive
+      - POSTGRES_DB=hive_metastore
+    ports:
+      - "25432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - hadoop-spark-hive
+
   hive-server:
     image: bde2020/hive:2.3.2
     container_name: hive-server
     hostname: hive-server
+
+    depends_on:
+      - postgres
     ports:
       - "20000:10000"
       - "20002:10002"
+    volumes:
+      - ./hive-entrypoint.sh:/opt/hive/hive-entrypoint.sh:ro
+      - ./jars/postgresql-42.7.4.jar:/opt/hive/lib/postgresql-42.7.4.jar:ro
     environment:
-      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864"
-      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: "jdbc:derby:;databaseName=/opt/hive/metastore_db;create=true"
-      HIVE_SITE_CONF_javax_jdo_option_ConnectionDriverName: "org.apache.derby.jdbc.EmbeddedDriver"
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 postgres:5432"
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://postgres:5432/hive_metastore"
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionDriverName: "org.postgresql.Driver"
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionUserName: "hive"
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionPassword: "hive"
       HIVE_SITE_CONF_datanucleus_autoCreateSchema: "true"
+      HIVE_SITE_CONF_hive_metastore_schema_verification: "false"
       HIVE_SITE_CONF_hive_metastore_warehouse_dir: "/user/hive/warehouse"
       CORE_CONF_fs_defaultFS: "hdfs://namenode:9000"
       CORE_CONF_hadoop_http_staticuser_user: "root"
       HDFS_CONF_dfs_webhdfs_enabled: "true"
       HDFS_CONF_dfs_permissions_enabled: "false"
       HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+    command: ["bash", "/opt/hive/hive-entrypoint.sh"]
     env_file:
       - ./hadoop.env
     networks:
@@ -145,6 +178,7 @@ volumes:
   hadoop_namenode:
   hadoop_datanode:
   hadoop_historyserver:
+  pg_data:
 
 networks:
   hadoop-spark-hive:
