@@ -1,0 +1,71 @@
+name: Swarm deployment
+on:
+  push:
+    paths: ['swarm/**', 'hadoop.env', '.github/workflows/swarm.yml']
+  pull_request:
+    paths: ['swarm/**', 'hadoop.env', '.github/workflows/swarm.yml']
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: Build images and run single-host Swarm smoke test
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s swarm/tests -v
+      - run: |
+          find swarm -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          python3 swarm/render.py swarm/cluster.example.json
+          docker stack config -c swarm/build/stack.json > /dev/null
+      - run: shellcheck swarm/cluster.sh swarm/smoke-test.sh swarm/images/*/*.sh
+  smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.smoke
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure single-host Swarm
+        run: |
+          docker swarm init
+          python3 - <<'PY'
+          import json, socket
+          c = json.load(open('swarm/cluster.example.json'))
+          c['master_node'] = socket.gethostname().lower()
+          c['workers'] = [{'id': 'worker-1', 'node': c['master_node']}]
+          c['hdfs_replication'] = 1
+          json.dump(c, open('swarm/cluster.json', 'w'))
+          PY
+          openssl rand -hex 32 | docker secret create bigdata_postgres_password -
+      - run: ./swarm/cluster.sh build
+      - name: Deploy cached images
+        run: |
+          ./swarm/cluster.sh render
+          docker stack deploy --resolve-image never -c swarm/build/stack.json bigdata
+      - name: Wait for services and test real jobs
+        run: |
+          ready=false
+          for attempt in $(seq 1 60); do
+            if timeout 30 ./swarm/cluster.sh hive -e 'SHOW DATABASES;'; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+          $ready
+          timeout 600 ./swarm/smoke-test.sh
+      - name: Diagnostics
+        if: always()
+        run: |
+          docker stack ps --no-trunc bigdata
+          for service in $(docker stack services bigdata -q); do
+            docker service logs --tail 100 "$service" || true
+          done
+      - name: Cleanup
+        if: always()
+        run: docker stack rm bigdata

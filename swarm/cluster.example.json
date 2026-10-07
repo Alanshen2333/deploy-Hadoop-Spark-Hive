@@ -1,0 +1,16 @@
+{
+  "stack": "bigdata",
+  "master_node": "master-1",
+  "workers": [
+    {"id": "worker-1", "node": "worker-1"},
+    {"id": "worker-2", "node": "worker-2"}
+  ],
+  "image_prefix": "ghcr.io/alanshen2333/deploy-hadoop-spark-hive",
+  "image_tag": "swarm-v1",
+  "postgres_password_secret": "bigdata_postgres_password",
+  "hdfs_replication": 2,
+  "yarn_memory_mb": 4096,
+  "yarn_vcores": 2,
+  "spark_worker_memory": "2G",
+  "spark_worker_cores": 2
+}

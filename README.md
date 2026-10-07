@@ -2,6 +2,11 @@
 
 基于 Docker Compose 的伪分布式大数据集群，一键启动 Hadoop、Spark 和 Hive 学习环境。
 
+支持通过 **Docker Swarm 部署到多台 Linux 主机**：HDFS / YARN / Spark
+工作节点可扩展，Hive 使用独立 Metastore + PostgreSQL。
+部署步骤、镜像构建和验收命令见 [Swarm 分布式部署指南](swarm/README.md)。
+原有 `start-cluster.sh` 等脚本仍用于单机 Compose；多机使用 `swarm/cluster.sh`。
+
 本项目最初通过 Docker 容器化部署大数据组件，后续进行了 **Git 规范化、配置标准化和文档完善**。
 
 ---
@@ -127,7 +132,7 @@
 
 - **Hadoop** 3.2.1 (HDFS / YARN / MapReduce)
 - **Spark** 3.3.0
-- **Hive** 2.3.2 (内置 Derby 元数据库)
+- **Hive** 2.3.2 (PostgreSQL 元数据库；Swarm 使用独立 Metastore)
 
 ---
 

@@ -31,3 +31,8 @@ Thumbs.db
 *.tmp
 *.bak
 *.log
+
+# Local Swarm inventory and rendered configs
+swarm/cluster.json
+swarm/build/
+__pycache__/
