@@ -1,8 +1,8 @@
 # Runtime data
-data/*
-!data/.gitkeep
-logs/*
-!logs/.gitkeep
+deployments/compose/data/*
+!deployments/compose/data/.gitkeep
+deployments/compose/logs/*
+!deployments/compose/logs/.gitkeep
 
 # Environment & secrets
 .env
@@ -12,7 +12,6 @@ logs/*
 *.key
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 
 # IDE
@@ -33,6 +32,10 @@ Thumbs.db
 *.log
 
 # Local Swarm inventory and rendered configs
-swarm/cluster.json
-swarm/build/
+deployments/swarm/cluster.json
+deployments/swarm/build/
 __pycache__/
+
+# Local Compose database password (example remains tracked)
+deployments/compose/secrets/*
+!deployments/compose/secrets/postgres_password.example

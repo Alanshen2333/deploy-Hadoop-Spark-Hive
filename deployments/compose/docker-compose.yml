@@ -1,0 +1,213 @@
+version: "3.8"
+
+x-xml-environment: &xml-environment
+  CLUSTER_CONFIG_DIR: /etc/cluster/hadoop
+  HIVE_CONFIG_FILE: /etc/cluster/hive/compose/hive-site.xml
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+
+    ports:
+      - 19870:9870
+      - 19000:9000
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      <<: *xml-environment
+      CLUSTER_NAME: "test"
+    networks:
+      - hadoop-spark-hive
+
+    entrypoint: ["bash", "/opt/cluster/hadoop-entrypoint.sh"]
+    command: ["namenode"]
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      <<: *xml-environment
+      SERVICE_PRECONDITION: "namenode:9870"
+    networks:
+      - hadoop-spark-hive
+
+    entrypoint: ["bash", "/opt/cluster/hadoop-entrypoint.sh"]
+    command: ["datanode"]
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+
+    ports:
+      - 18088:8088
+    environment:
+      <<: *xml-environment
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864"
+    networks:
+      - hadoop-spark-hive
+
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+
+    entrypoint: ["bash", "/opt/cluster/hadoop-entrypoint.sh"]
+    command: ["resourcemanager"]
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+
+    ports:
+      - 18042:8042
+    environment:
+      <<: *xml-environment
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    networks:
+      - hadoop-spark-hive
+
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+
+    entrypoint: ["bash", "/opt/cluster/hadoop-entrypoint.sh"]
+    command: ["nodemanager"]
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: historyserver
+
+    ports:
+      - 18188:8188
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    environment:
+      <<: *xml-environment
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    networks:
+      - hadoop-spark-hive
+
+    entrypoint: ["bash", "/opt/cluster/hadoop-entrypoint.sh"]
+    command: ["historyserver"]
+
+  spark-master:
+    image: bde2020/spark-master:3.3.0-hadoop3.3
+    container_name: spark-master
+    hostname: spark-master
+
+    ports:
+      - "18080:8080"
+      - "17077:7077"
+      - "18888:8888"
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - ./jars/postgresql-42.7.4.jar:/spark/jars/postgresql-42.7.4.jar:ro
+    environment:
+      <<: *xml-environment
+      INIT_DAEMON_STEP: "setup_spark"
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+      SPARK_MASTER_LOG: "/spark/logs"
+    extra_hosts:
+      - "spark-driver.local:172.18.0.1"
+    networks:
+      - hadoop-spark-hive
+
+    entrypoint: ["bash", "/opt/cluster/spark-compose-entrypoint.sh"]
+    secrets: [postgres_password]
+
+  spark-worker:
+    image: bde2020/spark-worker:3.3.0-hadoop3.3
+    container_name: spark-worker
+    hostname: spark-worker
+
+    depends_on:
+      - spark-master
+    ports:
+      - "18081:8081"
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - ./jars/postgresql-42.7.4.jar:/spark/jars/postgresql-42.7.4.jar:ro
+    environment:
+      <<: *xml-environment
+      SPARK_MASTER: "spark://spark-master:7077"
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: "4G"
+      SPARK_WORKER_PORT: "8881"
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    extra_hosts:
+      - "spark-driver.local:172.18.0.1"
+    networks:
+      - hadoop-spark-hive
+
+    entrypoint: ["bash", "/opt/cluster/spark-compose-entrypoint.sh"]
+    secrets: [postgres_password]
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    secrets: [postgres_password]
+
+    environment:
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - POSTGRES_DB=hive_metastore
+    ports:
+      - "25432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - hadoop-spark-hive
+
+  hive-server:
+    image: bde2020/hive:2.3.2
+    container_name: hive-server
+    hostname: hive-server
+
+    depends_on:
+      - postgres
+    ports:
+      - "20000:10000"
+      - "20002:10002"
+    volumes:
+      - ../../config:/etc/cluster:ro
+      - ../../images/common:/opt/cluster:ro
+      - ./hive-entrypoint.sh:/opt/hive/hive-entrypoint.sh:ro
+      - ./jars/postgresql-42.7.4.jar:/opt/hive/lib/postgresql-42.7.4.jar:ro
+    environment:
+      <<: *xml-environment
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 postgres:5432"
+    entrypoint: ["bash", "/opt/hive/hive-entrypoint.sh"]
+    networks:
+      - hadoop-spark-hive
+
+    secrets: [postgres_password]
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_historyserver:
+  pg_data:
+
+networks:
+  hadoop-spark-hive:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:-./secrets/postgres_password.example}
